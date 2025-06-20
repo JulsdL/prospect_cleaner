@@ -9,22 +9,31 @@ class NameValidator:
     """Isolated service ─ can be mocked in tests."""
 
     _prompt_tmpl = """
-Analyse et corrige si nécessaire ces informations de nom/prénom :
+Analyse et corrige si nécessaire ces informations de nom/prénom:
 Nom: "{nom}"
 Prénom: "{prenom}"
 
-Points à vérifier :
-- Inversion nom/prénom
-- Noms composés mal séparés
-- Noms multiculturels
+Problèmes possibles à corriger :
+        - Inversion nom/prénom
+        - Noms composés mal séparés
+        - Noms multiculturels (portugais, indiens, chinois, etc.)
+        - Noms composés de type « nom de mariage + nom de jeune-fille » (ex : « Sophie Riben Bascher » → Prénom : « Sophie », Nom : « Riben Bascher »)
 
-Réponds UNIQUEMENT en JSON :
-{{
-  "nom_corrige": "…",
-  "prenom_corrige": "…",
-  "confidence_nom": 0.9,
-  "confidence_prenom": 0.9
-}}
+        Pour le score de confiance, évalue entre 0 et 1 sur ces critères :
+        - Cohérence culturelle (les noms correspondent à une même origine)
+        - Probabilité que la séparation soit correcte
+        - Complexité du cas (noms composés = moins de confiance)
+        - Certitude de la correction appliquée
+
+        Réponds uniquement en JSON :
+        {{
+            "nom_corrige": "nom corrigé",
+            "prenom_corrige": "prénom corrigé",
+            "confidence_nom": 0.95,
+            "confidence_prenom": 0.90,
+            "reasoning": "justification du score de confiance",
+            "corrections_appliquees": "description des corrections"
+        }}
 """
 
     def __init__(self, client: AsyncOpenAI | None = None) -> None:
@@ -46,7 +55,7 @@ Réponds UNIQUEMENT en JSON :
         prompt = self._prompt_tmpl.format(nom=nom, prenom=prenom)
         try:
             resp = await self._client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-4.1-mini",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.1,
                 max_tokens=300,

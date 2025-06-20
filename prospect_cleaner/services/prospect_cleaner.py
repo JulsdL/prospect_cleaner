@@ -47,7 +47,9 @@ class ProspectDataCleaner:
         df.at[row_idx, "confiance_nom"]        = n_res.confidence
         df.at[row_idx, "confiance_prenom"]     = p_res.confidence
         df.at[row_idx, "confiance_entreprise"] = c_res.confidence
-        df.at[row_idx, "source_validation"]    = "ok"
+        df.at[row_idx, "entreprise_citations"] = c_res.source
+        df.at[row_idx, "entreprise_explication"] = c_res.explanation
+        df.at[row_idx, "source_validation"]    = f"nom:{n_res.source}"
 
     async def _save_loop(self, df: pd.DataFrame, out: Path) -> None:
         """
@@ -69,12 +71,30 @@ class ProspectDataCleaner:
         input_path: str | Path,
         output_path: str | Path,
     ) -> None:
+        # df = read_csv(input_path)
+        # for col in ("_valide", "_validee",
+        #             "confiance_nom", "confiance_prenom", "confiance_entreprise",
+        #             "source_validation"):
+        #     if col not in df.columns:
+        #         df[col] = ""
+
         df = read_csv(input_path)
-        for col in ("_valide", "_validee",
-                    "confiance_nom", "confiance_prenom", "confiance_entreprise",
-                    "source_validation"):
+
+        # ensure all result columns are present
+        result_cols = {
+            f"{settings.nom_col}_valide":        "",
+            f"{settings.prenom_col}_valide":     "",
+            f"{settings.entreprise_col}_validee": "",
+            "confiance_nom":         0.0,
+            "confiance_prenom":      0.0,
+            "confiance_entreprise":  0.0,
+            "entreprise_citations":  "",
+            "entreprise_explication":"",
+            "source_validation":     "",
+        }
+        for col, default in result_cols.items():
             if col not in df.columns:
-                df[col] = ""
+                df[col] = default
 
         tasks = [
             self._process_row(idx, df.iloc[idx].copy(), df)
