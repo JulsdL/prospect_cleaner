@@ -1,4 +1,4 @@
-import json, re
+import json, re, difflib
 from typing import Tuple
 from openai import AsyncOpenAI
 from prospect_cleaner.models.validation_result import ValidationResult
@@ -35,6 +35,27 @@ Problèmes possibles à corriger :
             "corrections_appliquees": "description des corrections"
         }}
 """
+    # ------------------------------------------------------------------ #
+    # Confidence helpers
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def _similarity(a: str, b: str) -> float:
+        """Rapport de similarité (0‑1) entre chaînes, simple et rapide."""
+        return difflib.SequenceMatcher(None, a.lower(), b.lower()).ratio()
+
+    @staticmethod
+    def _calibrate(base: float, original: str, cleaned: str) -> float:
+        """
+        Ajuste la confiance :
+        • si la correction est minime → score ↑
+        • si elle est lourde → score ↓
+        """
+        sim = NameValidator._similarity(original, cleaned)
+        # ex : inversion «Pierre | Dupont» → sim ~0.8
+        #      reprise complète  → sim <0.5
+        penalty = (1 - sim) * 0.4        # max ‑0.4
+        bonus   = sim * 0.2              # max +0.2
+        return min(max(base + bonus - penalty, 0), 1)
 
     def __init__(self, client: AsyncOpenAI | None = None) -> None:
         self._client = client or (
@@ -64,12 +85,14 @@ Problèmes possibles à corriger :
             txt = re.sub(r"^```json|```$", "", txt).strip()
             data = json.loads(txt)
 
+            conf_nom     = self._calibrate(float(data["confidence_nom"]), nom, data["nom_corrige"])
+            conf_prenom  = self._calibrate(float(data["confidence_prenom"]), prenom, data["prenom_corrige"])
+
             return (
-                ValidationResult(nom, data["nom_corrige"],
-                                float(data["confidence_nom"]), "gpt4"),
-                ValidationResult(prenom, data["prenom_corrige"],
-                                float(data["confidence_prenom"]), "gpt4"),
+                ValidationResult(nom, data["nom_corrige"], conf_nom, "gpt4"),
+                ValidationResult(prenom, data["prenom_corrige"], conf_prenom, "gpt4"),
             )
+            
         except Exception as e:
             logger.error("Name LLM error (%s %s): %s", nom, prenom, e, exc_info=False)
             return (
