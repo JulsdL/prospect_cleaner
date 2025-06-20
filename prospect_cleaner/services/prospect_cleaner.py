@@ -8,11 +8,11 @@ from __future__ import annotations
 import asyncio, time
 from pathlib import Path
 import pandas as pd
-from hublead.settings import settings
-from hublead.logconf import logger
-from hublead.services.name_validator import NameValidator
-from hublead.services.company_validator import CompanyValidator
-from hublead.utils.csv_utils import read_csv, write_csv
+from prospect_cleaner.settings import settings
+from prospect_cleaner.logconf import logger
+from prospect_cleaner.services.name_validator import NameValidator
+from prospect_cleaner.services.company_validator import CompanyValidator
+from prospect_cleaner.utils.csv_utils import read_csv, write_csv
 
 class ProspectDataCleaner:
     def __init__(self) -> None:

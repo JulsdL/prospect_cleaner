@@ -1,9 +1,9 @@
 import json, re
 from typing import Tuple
 from openai import AsyncOpenAI
-from hublead.models.validation_result import ValidationResult
-from hublead.settings import settings
-from hublead.logconf import logger
+from prospect_cleaner.models.validation_result import ValidationResult
+from prospect_cleaner.settings import settings
+from prospect_cleaner.logconf import logger
 
 class NameValidator:
     """Isolated service ─ can be mocked in tests."""

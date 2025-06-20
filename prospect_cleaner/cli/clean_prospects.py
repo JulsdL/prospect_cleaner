@@ -1,7 +1,7 @@
 import asyncio, argparse, sys
 from pathlib import Path
-from hublead.services.prospect_cleaner import ProspectDataCleaner
-from hublead.logconf import logger
+from prospect_cleaner.services.prospect_cleaner import ProspectDataCleaner
+from prospect_cleaner.logconf import logger
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(

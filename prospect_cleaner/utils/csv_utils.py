@@ -1,7 +1,7 @@
 import pandas as pd
 from pathlib import Path
 from .async_utils import run_sync
-from hublead.logconf import logger
+from prospect_cleaner.logconf import logger
 
 def read_csv(path: str | Path) -> pd.DataFrame:
     try:
