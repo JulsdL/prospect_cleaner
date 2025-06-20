@@ -141,12 +141,25 @@ class CompanyValidator:
             urls, explanation = self._parse_response(response)
             citation_str = ";".join(urls) if urls else ""
 
-            # 4. Try to load JSON content
+            # 4. Reconstruire tout le texte brut et extraire le JSON block
+            raw_chunks: list[str] = []
+            for item in getattr(response, "output", []):
+                if item.type != "message":
+                    continue
+                for chunk in item.content:
+                    if hasattr(chunk, "text"):
+                        raw_chunks.append(chunk.text)
+            raw = "\n".join(raw_chunks)
+
+            # 5. Charger strictement le bloc JSON
             data = {}
-            try:
-                data = json.loads(response.output_text)
-            except (TypeError, json.JSONDecodeError):
-                pass
+            m = re.search(r"```json\s*(\{.*?\})\s*```", raw, flags=re.DOTALL)
+            if m:
+                try:
+                    data = json.loads(m.group(1))
+                except json.JSONDecodeError:
+                    data = {}
+
 
             # If JSON missing, fall back to a simple cleaned name
             if "nom_commercial" not in data:
@@ -199,7 +212,9 @@ class CompanyValidator:
             bonus += 0.1
         if unknown_flag:
             conf = conf * 0.3                      # réduit à 30 %
-        return min(max(conf + bonus, 0), 1)
+        raw = min(max(conf + bonus, 0), 1)
+        # arrondi à l’entier supérieur sur deux décimales
+        return math.ceil(raw * 100) / 100
 
 
 

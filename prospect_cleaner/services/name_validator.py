@@ -1,4 +1,4 @@
-import json, re, difflib
+import json, re, difflib, math
 from typing import Tuple
 from openai import AsyncOpenAI
 from prospect_cleaner.models.validation_result import ValidationResult
@@ -40,7 +40,7 @@ Problèmes possibles à corriger :
     # ------------------------------------------------------------------ #
     @staticmethod
     def _similarity(a: str, b: str) -> float:
-        """Rapport de similarité (0‑1) entre chaînes, simple et rapide."""
+        """Rapport de similarité (0-1) entre chaînes, simple et rapide."""
         return difflib.SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
     @staticmethod
@@ -53,9 +53,11 @@ Problèmes possibles à corriger :
         sim = NameValidator._similarity(original, cleaned)
         # ex : inversion «Pierre | Dupont» → sim ~0.8
         #      reprise complète  → sim <0.5
-        penalty = (1 - sim) * 0.4        # max ‑0.4
-        bonus   = sim * 0.2              # max +0.2
-        return min(max(base + bonus - penalty, 0), 1)
+        penalty = (1 - sim) * 0.4        
+        bonus   = sim * 0.2
+        raw = min(max(base + bonus - penalty, 0), 1)
+        # arrondi à l’entier supérieur sur deux décimales
+        return math.ceil(raw * 100) / 100
 
     def __init__(self, client: AsyncOpenAI | None = None) -> None:
         self._client = client or (
@@ -92,7 +94,7 @@ Problèmes possibles à corriger :
                 ValidationResult(nom, data["nom_corrige"], conf_nom, "gpt4"),
                 ValidationResult(prenom, data["prenom_corrige"], conf_prenom, "gpt4"),
             )
-            
+
         except Exception as e:
             logger.error("Name LLM error (%s %s): %s", nom, prenom, e, exc_info=False)
             return (
