@@ -105,3 +105,66 @@ class ProspectDataCleaner:
         await asyncio.gather(*tasks)
         await saver
         logger.info("Cleaning finished (%s → %s)", input_path, output_path)
+
+        # 🚀 Affiche le résumé en console
+        self._print_summary(
+            df,
+            settings.nom_col,
+            settings.prenom_col,
+            settings.entreprise_col,
+        )
+
+
+    def _print_summary(
+        self,
+        df: pd.DataFrame,
+        nom_col: str,
+        prenom_col: str,
+        entreprise_col: str,
+        ) -> None:
+
+        """Affiche un résumé des traitements en console."""
+        total = len(df)
+        processed = df[df["source_validation"] != ""]
+        cnt = len(processed)
+
+        if cnt == 0:
+            print("\n=== AUCUNE LIGNE TRAITÉE ===")
+            return
+
+        # Corrections appliquées
+        nom_corr = (processed[nom_col] != processed[f"{nom_col}_valide"]).sum()
+        prenom_corr = (processed[prenom_col] != processed[f"{prenom_col}_valide"]).sum()
+        ent_corr = (processed[entreprise_col] != processed[f"{entreprise_col}_validee"]).sum()
+
+        # Moyennes de confiance
+        avg_nom = processed["confiance_nom"].mean()
+        avg_prenom = processed["confiance_prenom"].mean()
+        avg_ent = processed["confiance_entreprise"].mean()
+
+        print("\n=== RÉSUMÉ DU TRAITEMENT ===")
+        print(f"Total lignes dans le fichier: {total}")
+        print(f"Lignes traitées: {cnt}")
+        print(f"Corrections noms: {nom_corr} ({nom_corr/cnt*100:.1f}%)")
+        print(f"Corrections prénoms: {prenom_corr} ({prenom_corr/cnt*100:.1f}%)")
+        print(f"Corrections entreprises: {ent_corr} ({ent_corr/cnt*100:.1f}%)")
+        print(f"Confiance moyenne - Noms: {avg_nom:.2f}")
+        print(f"Confiance moyenne - Prénoms: {avg_prenom:.2f}")
+        print(f"Confiance moyenne - Entreprises: {avg_ent:.2f}")
+
+        # Exemples
+        print("\n=== EXEMPLES DE CORRECTIONS ===")
+
+        # Noms
+        ex_noms = processed[processed[nom_col] != processed[f"{nom_col}_valide"]].head(3)
+        if not ex_noms.empty:
+            print("\nCorrections de noms:")
+            for _, row in ex_noms.iterrows():
+                print(f"  {row[nom_col]} → {row[f'{nom_col}_valide']} (confiance: {row['confiance_nom']:.2f})")
+
+        # Entreprises
+        ex_ent = processed[processed[entreprise_col] != processed[f"{entreprise_col}_validee"]].head(3)
+        if not ex_ent.empty:
+            print("\nCorrections d'entreprises:")
+            for _, row in ex_ent.iterrows():
+                print(f"  {row[entreprise_col]} → {row[f'{entreprise_col}_validee']} (confiance: {row['confiance_entreprise']:.2f})")
