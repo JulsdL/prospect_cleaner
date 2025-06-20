@@ -73,7 +73,7 @@ class CompanyValidator:
         return urls, explanation
 
     # --------------------------------------------------------------------- #
-    # Public API
+    # OpenAI Response API with web_search_preview tool
     # --------------------------------------------------------------------- #
 
     async def validate(self, company_input: str, email_domain: str = "") -> ValidationResult:
@@ -81,9 +81,7 @@ class CompanyValidator:
         if not self._client or not company_input:
             return ValidationResult(company_input, company_input, 0.0, "no_llm")
 
-        # ------------------------------------------------------------------ #
-        # 1. Build messages exactly like the old code
-        # ------------------------------------------------------------------ #
+
         messages = [
             {
                 "role": "developer",
@@ -94,7 +92,7 @@ You are an expert in global companies and commercial brands.
 # Instructions
 - Always perform a web search to identify the company.
 - Ignore legal suffixes (SARL, SA, AG, etc.) when searching.
-- Return the current public used trade name on the website of the company or its social media profiles.
+- Return the current publicly used trade name on the website of the company or its social media profiles, instead of it's legally registered name, it may differ !
 - If the company has recently changed its name, use the new name.
 - For subsidiaries, use the main brand unless the subsidiary has its own identity.
 - Evaluate your confidence (0-1) based on:
