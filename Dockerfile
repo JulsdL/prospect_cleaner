@@ -25,7 +25,9 @@ COPY --from=builder /wheels /wheels
 RUN pip install --no-cache-dir /wheels/* \
   && rm -rf /wheels
 
-COPY --chown=appuser:appuser prospect_cleaner/ main.py ./
+COPY --chown=appuser:appuser prospect_cleaner/ ./prospect_cleaner/
+COPY --chown=appuser:appuser main.py ./
+
 USER appuser
 
 EXPOSE 8000
