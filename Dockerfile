@@ -1,24 +1,32 @@
-# Use an official Python runtime as a parent image
-FROM python:3.10-slim
+# syntax=docker/dockerfile:1.5
+FROM python:3.12-alpine AS builder
 
-# Set the working directory in the container
-WORKDIR /app
+# musl-based build tools
+RUN apk add --no-cache \
+      build-base \
+      libffi-dev \
+      openssl-dev \
+      musl-dev \
+      python3-dev
 
-# Copy the requirements file into the container at /app
+WORKDIR /src
 COPY requirements.txt .
 
-# Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# cache your pip downloads with BuildKit
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip wheel --no-cache-dir --wheel-dir=/wheels -r requirements.txt
 
-# Copy the prospect_cleaner directory and main.py into the container at /app
-COPY ./prospect_cleaner ./prospect_cleaner
-COPY main.py .
+FROM python:3.12-alpine AS runtime
+RUN adduser --disabled-password --gecos '' appuser
+WORKDIR /app
 
-# Make port 8000 available to the world outside this container
+# install only Alpine-compatible wheels
+COPY --from=builder /wheels /wheels
+RUN pip install --no-cache-dir /wheels/* \
+  && rm -rf /wheels
+
+COPY --chown=appuser:appuser prospect_cleaner/ main.py ./
+USER appuser
+
 EXPOSE 8000
-
-# Define environment variable
-ENV PYTHONPATH "${PYTHONPATH}:/app"
-
-# Run uvicorn when the container launches
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["gunicorn","-k","uvicorn.workers.UvicornWorker","main:app","--bind","0.0.0.0:8000","--workers","4"]

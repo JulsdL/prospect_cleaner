@@ -1,3 +1,6 @@
-fastapi
-uvicorn[standard]
-pandas
+fastapi==0.115.13
+uvicorn==0.34.3
+pandas==2.3.0
+openai==1.88.0
+python_dotenv==1.1.0
+gunicorn==23.0.0

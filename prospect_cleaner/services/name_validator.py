@@ -53,7 +53,7 @@ Problèmes possibles à corriger :
         sim = NameValidator._similarity(original, cleaned)
         # ex : inversion «Pierre | Dupont» → sim ~0.8
         #      reprise complète  → sim <0.5
-        penalty = (1 - sim) * 0.4        
+        penalty = (1 - sim) * 0.4
         bonus   = sim * 0.2
         raw = min(max(base + bonus - penalty, 0), 1)
         # arrondi à l’entier supérieur sur deux décimales
@@ -91,8 +91,8 @@ Problèmes possibles à corriger :
             conf_prenom  = self._calibrate(float(data["confidence_prenom"]), prenom, data["prenom_corrige"])
 
             return (
-                ValidationResult(nom, data["nom_corrige"], conf_nom, "gpt4"),
-                ValidationResult(prenom, data["prenom_corrige"], conf_prenom, "gpt4"),
+                ValidationResult(nom, data["nom_corrige"], conf_nom, "gpt4.1-mini"),
+                ValidationResult(prenom, data["prenom_corrige"], conf_prenom, "gpt4.1-mini"),
             )
 
         except Exception as e:
