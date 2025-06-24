@@ -59,19 +59,46 @@ You are an expert in global companies and commercial brands.
 - Preserve special characters.
 - Do not guess or invent.
 - All textual explanations (`explication`) MUST be in French.
-- You MUST return *only* a JSON object. Do not include any other text or explanations outside the JSON structure. The JSON object should conform to this schema:
 
+- CRITICAL REQUIREMENT: Your *entire response* MUST be a single, valid JSON object. Do NOT include any text, remarks, or explanations outside of this JSON object. Adhere strictly to the schema provided below.
+
+- If the company is positively identified: Populate all fields as accurately as possible.
+- If the company cannot be reliably found or information is ambiguous:
+    - `nom_commercial` should be the original input company name, cleaned by basic legal suffix removal.
+    - `confidence` MUST be low (e.g., less than 0.3).
+    - `entreprise_connue` MUST be `false`.
+    - `explication` should state that the company was not found or identified with certainty, in French.
+    - `citations` should be an empty list or include URLs that explain the ambiguity/lack of information.
+- Regardless of the outcome (found, not found, ambiguous), the output MUST be JSON.
+
+JSON Schema:
 {
-    "nom_commercial": "Meta",
-    "confidence": 0.95,
-    "explication": "Nom officiel après changement en 2021.",
-    "changement_nom": true,
-    "entreprise_connue": true,
-    "citations": ["https://example.com"]
+    "nom_commercial": "string",
+    "confidence": "float (0.0 to 1.0)",
+    "explication": "string (in French)",
+    "changement_nom": "boolean",
+    "entreprise_connue": "boolean",
+    "citations": ["list of strings (URLs)"]
 }
-
-If the company is not found, `nom_commercial` should be the cleaned input company name, `confidence` should be low (e.g., < 0.3), and `entreprise_connue` should be `false`.
 """
+            },
+            {
+                "role": "user",
+                "content": 'Entreprise: "Fantomas Widgets Introuvables SA", Domaine email: "contact@fantomas.xyz"'
+            },
+            {
+                "role": "assistant",
+                "content": """\
+```json
+{
+    "nom_commercial": "Fantomas Widgets Introuvables",
+    "confidence": 0.1,
+    "explication": "L'entreprise 'Fantomas Widgets Introuvables SA' n'a pas pu être identifiée de manière fiable lors de la recherche. Le nom a été nettoyé des suffixes légaux.",
+    "changement_nom": false,
+    "entreprise_connue": false,
+    "citations": []
+}
+```"""
             },
             {
                 "role": "user",
