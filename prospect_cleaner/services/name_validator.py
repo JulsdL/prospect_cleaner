@@ -14,13 +14,43 @@ Nom: "{nom}"
 Prénom: "{prenom}"
 
 Problèmes possibles à corriger :
-        - Inversion nom/prénom
-        - Noms composés mal séparés
-        - Noms multiculturels (portugais, indiens, chinois, etc.)
-        - Noms composés de type « nom de mariage + nom de jeune-fille » (ex : « Sophie Riben Bascher » → Prénom : « Sophie », Nom : « Riben Bascher »)
+        - Inversion nom/prénom (ex: "Dupont Pierre" → Prénom: "Pierre", Nom: "Dupont").
+        - Noms composés mal séparés.
+        - Noms multiculturels (européens, arabes, est-asiatiques, indiens, etc.).
+        - Noms composés de type « nom de mariage + nom de jeune-fille » (ex : « Sophie Riben Bascher » → Prénom : « Sophie », Nom : « Riben Bascher »).
+
+Instructions spécifiques pour noms multiculturels :
+        - Noms Arabes : Les particules comme "Al-", "El-", "Ben", "Bin", "Bint", "Abu" font généralement partie du nom de famille. Ex: "Fatima Al-Mahmoud" → Prénom: "Fatima", Nom: "Al-Mahmoud". "Mohammed Ben Ali" → Prénom: "Mohammed", Nom: "Ben Ali".
+        - Noms Est-Asiatiques (chinois, japonais, coréen, vietnamien) :
+            - L'ordre peut être Nom puis Prénom (ex: "Zhang Li Wei" → Nom: "Zhang", Prénom: "Li Wei"). Sois attentif à l'ordre fourni et corrige seulement si manifestement inversé pour un contexte occidental.
+            - Les prénoms peuvent être composés de plusieurs parties (ex: "Li Wei", "Xiao Li", "Kenjiro"). Ces parties doivent rester groupées dans le champ prénom. Ex: Prénom: "Xiao Li", Nom: "Chen" (si l'entrée était "Chen Xiao Li").
+        - Noms Hispaniques/Portugais : Souvent composés de plusieurs noms et prénoms. Ex: "Maria João Da Silva Santos" → Prénom: "Maria João", Nom: "Da Silva Santos".
+
+Exemple de cas complexe :
+Input: Nom: "Ben Ali Hassan", Prénom: "Mohammed"
+Output attendu (si "Ben Ali Hassan" est le nom complet):
+{{
+    "nom_corrige": "Ben Ali Hassan",
+    "prenom_corrige": "Mohammed",
+    "confidence_nom": 0.85,
+    "confidence_prenom": 0.95,
+    "reasoning": "Nom de structure arabe, 'Ben' fait partie du nom de famille. Prénom simple.",
+    "corrections_appliquees": "Aucune correction, ordre initial correct."
+}}
+
+Input: Nom: "Tanaka", Prénom: "Hiroshi Kenji" (supposant une erreur d'entrée où Kenji est un 2e prénom)
+Output attendu:
+{{
+    "nom_corrige": "Tanaka",
+    "prenom_corrige": "Hiroshi Kenji",
+    "confidence_nom": 0.95,
+    "confidence_prenom": 0.90,
+    "reasoning": "Prénom japonais potentiellement composé (Hiroshi Kenji). Nom simple.",
+    "corrections_appliquees": "Fusion des prénoms si jugé comme un prénom composé."
+}}
 
         Pour le score de confiance, évalue entre 0 et 1 sur ces critères :
-        - Cohérence culturelle (les noms correspondent à une même origine)
+        - Cohérence culturelle (les noms correspondent à une même origine et structure)
         - Probabilité que la séparation soit correcte
         - Complexité du cas (noms composés = moins de confiance)
         - Certitude de la correction appliquée
