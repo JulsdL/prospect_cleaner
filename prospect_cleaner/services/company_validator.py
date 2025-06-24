@@ -21,43 +21,154 @@ class CompanyValidator:
             if settings.openai_api_key else None
         )
 
-    @staticmethod
-    def _parse_response(response) -> Tuple[List[str], str]:
-        urls, texts = [], []
-        for item in getattr(response, "output", []):
-            if item.type != "message":
-                continue
-            for chunk in item.content:
-                if hasattr(chunk, "text"):
-                    texts.append(chunk.text.strip())
-                for ann in getattr(chunk, "annotations", []):
-                    if getattr(ann, "type", "") == "url_citation" and ann.url:
-                        urls.append(ann.url)
-        raw = "\n\n".join(texts)
-        # strip JSON block if present
-        data = {}
-        m = re.search(r"```json\s*(\{.*?\})\s*```", raw, flags=re.DOTALL)
-        if m:
-            try:
-                data = json.loads(m.group(1))
-            except json.JSONDecodeError:
-                data = {}
-        for u in data.get("citations", []):
-            if isinstance(u, str):
-                urls.append(u)
-        if "explication" in data and isinstance(data["explication"], str):
-            expl = data["explication"]
-        else:
-            expl = re.sub(r"```json.*?```", "", raw, flags=re.DOTALL)
-        expl = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", expl)
-        expl = re.sub(r"^[\-\*\•]\s*", "", expl, flags=re.MULTILINE)
-        explanation = " ".join(expl.split()).strip()
-        return urls, explanation
-
     async def validate(self, company_input: str, email_domain: str = "") -> ValidationResult:
-        company_input = (company_input or "").strip()
-        if not self._client or not company_input:
-            return ValidationResult(company_input, company_input, 0.0, "no_llm")
+        # Ensure company_input is a string and cleaned up
+        if not isinstance(company_input, str):
+            # Convert potential NaN (float) or None to empty string or "nan"
+            company_input_str = str(company_input) if company_input is not None else ""
+            if company_input_str.lower() == "nan": # Check for "nan" string irrespective of case
+                company_input_str = "" # Treat actual "nan" strings (from NaN floats) as empty
+        else:
+            company_input_str = company_input
+
+        company_input_str = company_input_str.strip()
+
+        if not self._client or not company_input_str: # Check after ensuring it's a string
+            # Pass original company_input for the first field of ValidationResult for fidelity
+            return ValidationResult(company_input, company_input_str, 0.0, "no_llm")
+
+        # All further processing uses company_input_str
+        messages = [
+            {
+                "role": "developer",
+                "content": """
+# Identity
+You are an expert in global companies and commercial brands.
+
+# Instructions
+- Always perform a web search to identify the company.
+- Ignore legal suffixes (SARL, SA, AG, etc.) when searching.
+- Return the current publicly used trade name.
+- If recently renamed, use the new name.
+- For subsidiaries, use the main brand unless distinct.
+- Evaluate confidence (0-1) on:
+    • Certainty of identification
+    • Match with email domain
+    • Whether it’s well-known
+- If not found, use the cleaned input name for `nom_commercial` and provide an explanation.
+- Preserve special characters.
+- Do not guess or invent.
+- All textual explanations (`explication`) MUST be in French.
+- You MUST return *only* a JSON object. Do not include any other text or explanations outside the JSON structure. The JSON object should conform to this schema:
+
+{
+    "nom_commercial": "Meta",
+    "confidence": 0.95,
+    "explication": "Nom officiel après changement en 2021.",
+    "changement_nom": true,
+    "entreprise_connue": true,
+    "citations": ["https://example.com"]
+}
+
+If the company is not found, `nom_commercial` should be the cleaned input company name, `confidence` should be low (e.g., < 0.3), and `entreprise_connue` should be `false`.
+"""
+            },
+            {
+                "role": "user",
+                "content": (
+                    f'Entreprise: "{company_input_str}", ' # Use the cleaned string version
+                    f'Domaine email: "{email_domain if email_domain and email_domain != "nan" else "Non fourni"}"'
+                )
+            }
+        ]
+
+        try:
+            response = await self._client.responses.create(
+                model="gpt-4.1-mini",
+                tools=[{
+                    "type": "web_search_preview",
+                    "user_location": {"type": "approximate", "country": "CH"},
+                }],
+                input=messages,
+            )
+
+            # === DÉBOGAGE : imprime la réponse brute ===
+            print("=== [DEBUG] response.output_text ===")
+            print(response.output_text)
+            # print("=== [DEBUG] response.output JSON blocks ===") # No longer have separate JSON blocks
+
+            data = {}
+            explanation = "Failed to parse LLM response or extract key information."
+            urls = []
+
+            try:
+                raw_txt = response.output_text.strip()
+                # Attempt to extract JSON even if there's leading/trailing text,
+                # though ideally the LLM returns JSON only as per the updated prompt.
+                match = re.search(r"```json\s*(\{.*?\})\s*```", raw_txt, re.DOTALL)
+                if match:
+                    json_str = match.group(1)
+                else:
+                    # Assume the raw_txt is the JSON itself if no markdown block is found
+                    json_str = raw_txt
+
+                data = json.loads(json_str)
+                print("=== [DEBUG] JSON parsé ===")
+                print(data)
+
+                explanation = data.get("explication", "Explication non fournie par l'IA.")
+                raw_citations = data.get("citations", [])
+                if isinstance(raw_citations, list):
+                    urls = [str(c) for c in raw_citations if isinstance(c, str)]
+                else:
+                    urls = [] # or handle as an error/warning
+
+            except Exception as e:
+                print(f"[DEBUG] échec json.loads sur output_text: {e}")
+                # data remains {}
+                explanation = f"Erreur de parsing JSON: {e}"
+
+            citation_str = ";".join(urls) if urls else ""
+
+            if "nom_commercial" not in data or not data.get("nom_commercial"):
+                cleaned_name = self._basic_clean(company_input_str) # Use cleaned string
+                # Use a low, fixed confidence for this fallback.
+                # The 'unknown_flag' for _calibrate would be True. Domain match is False.
+                # Number of citations (urls) might be 0 if parsing failed before extracting them.
+                conf = self._calibrate(0.1, len(urls), False, True)
+                final_explanation = explanation if data else "Fallback: Nom nettoyé basiquement en raison d'une réponse invalide de l'IA."
+                if not data.get("nom_commercial") and "nom_commercial" in data : # specifically if nom_commercial was empty
+                    final_explanation = "Nom commercial non fourni par l'IA, utilisation du nom nettoyé."
+
+                print(f"[DEBUG] fallback basic clean → '{cleaned_name}', conf={conf}, explanation: {final_explanation}")
+                return ValidationResult(
+                    company_input, cleaned_name, conf, # original_input is company_input
+                    citation_str, final_explanation
+                )
+
+            nom_final = data["nom_commercial"]
+            base_conf = float(data.get("confidence", 0.5)) # LLM's self-assessed confidence
+
+            # Signaux additionnels pour calibration
+            # urls list is already populated from JSON data's "citations"
+            domain = re.sub(r"[^a-z0-9]", "",
+                            (email_domain or "").lower().split("@")[-1].split(".")[0])
+            # Check if the (cleaned) domain appears in the (cleaned) final name
+            cleaned_nom_final_for_domain_check = re.sub(r"[^a-z0-9]", "", nom_final.lower())
+            domain_ok = bool(domain and domain in cleaned_nom_final_for_domain_check)
+
+            # `entreprise_connue` comes from the JSON, default to True if missing (conservative)
+            # but prompt now guides LLM to set this, if it's missing, it's more likely an issue.
+            # Let's default to unknown (True for unknown_flag) if not present.
+            unknown_flag = not data.get("entreprise_connue", False) # If 'entreprise_connue':false, unknown_flag = true
+
+            confidence = self._calibrate(base_conf, len(urls), domain_ok, unknown_flag)
+            return ValidationResult(company_input, nom_final, confidence, citation_str, explanation) # original_input is company_input
+
+        except Exception as e:
+            logger.error("Company LLM error during validation call for '%s': %s", company_input_str, e, exc_info=True) # Log cleaned string
+            cleaned = self._basic_clean(company_input_str) # Use cleaned string
+            return ValidationResult(company_input, cleaned, 0.3, "error", "exception fallback") # original_input is company_input
 
         messages = [
             {
@@ -76,10 +187,11 @@ You are an expert in global companies and commercial brands.
     • Certainty of identification
     • Match with email domain
     • Whether it’s well-known
-- If not found, clean the name and mark unknown.
+- If not found, use the cleaned input name for `nom_commercial` and provide an explanation.
 - Preserve special characters.
 - Do not guess or invent.
-- You MUST return a JSON object with:
+- All textual explanations (`explication`) MUST be in French.
+- You MUST return *only* a JSON object. Do not include any other text or explanations outside the JSON structure. The JSON object should conform to this schema:
 
 {
     "nom_commercial": "Meta",
@@ -89,6 +201,8 @@ You are an expert in global companies and commercial brands.
     "entreprise_connue": true,
     "citations": ["https://example.com"]
 }
+
+If the company is not found, `nom_commercial` should be the cleaned input company name, `confidence` should be low (e.g., < 0.3), and `entreprise_connue` should be `false`.
 """
             },
             {
@@ -113,50 +227,78 @@ You are an expert in global companies and commercial brands.
             # === DÉBOGAGE : imprime la réponse brute ===
             print("=== [DEBUG] response.output_text ===")
             print(response.output_text)
-            print("=== [DEBUG] response.output JSON blocks ===")
+            # print("=== [DEBUG] response.output JSON blocks ===") # No longer have separate JSON blocks
 
-            # citations + explication textuelle
-            urls, explanation = self._parse_response(response)
-            citation_str = ";".join(urls) if urls else ""
-
-            # essaie de parser directement output_text
             data = {}
+            explanation = "Failed to parse LLM response or extract key information."
+            urls = []
+
             try:
                 raw_txt = response.output_text.strip()
-                raw_txt = re.sub(r"^```json\s*|\s*```$", "", raw_txt, flags=re.DOTALL)
-                data = json.loads(raw_txt)
+                # Attempt to extract JSON even if there's leading/trailing text,
+                # though ideally the LLM returns JSON only as per the updated prompt.
+                match = re.search(r"```json\s*(\{.*?\})\s*```", raw_txt, re.DOTALL)
+                if match:
+                    json_str = match.group(1)
+                else:
+                    # Assume the raw_txt is the JSON itself if no markdown block is found
+                    json_str = raw_txt
+
+                data = json.loads(json_str)
+                print("=== [DEBUG] JSON parsé ===")
+                print(data)
+
+                explanation = data.get("explication", "Explication non fournie par l'IA.")
+                raw_citations = data.get("citations", [])
+                if isinstance(raw_citations, list):
+                    urls = [str(c) for c in raw_citations if isinstance(c, str)]
+                else:
+                    urls = [] # or handle as an error/warning
+
             except Exception as e:
                 print(f"[DEBUG] échec json.loads sur output_text: {e}")
-                data = {}
+                # data remains {}
+                explanation = f"Erreur de parsing JSON: {e}"
 
-            print("=== [DEBUG] JSON parsé ===")
-            print(data)
+            citation_str = ";".join(urls) if urls else ""
 
-            # fallback si pas de nom_commercial
-            if "nom_commercial" not in data:
-                cleaned = self._basic_clean(company_input)
-                conf = self._calibrate(0.5, len(urls), False, True)
-                print(f"[DEBUG] fallback basic clean → '{cleaned}', conf={conf}")
+            if "nom_commercial" not in data or not data.get("nom_commercial"):
+                cleaned_name = self._basic_clean(company_input)
+                # Use a low, fixed confidence for this fallback.
+                # The 'unknown_flag' for _calibrate would be True. Domain match is False.
+                # Number of citations (urls) might be 0 if parsing failed before extracting them.
+                conf = self._calibrate(0.1, len(urls), False, True)
+                final_explanation = explanation if data else "Fallback: Nom nettoyé basiquement en raison d'une réponse invalide de l'IA."
+                if not data.get("nom_commercial") and "nom_commercial" in data : # specifically if nom_commercial was empty
+                    final_explanation = "Nom commercial non fourni par l'IA, utilisation du nom nettoyé."
+
+                print(f"[DEBUG] fallback basic clean → '{cleaned_name}', conf={conf}, explanation: {final_explanation}")
                 return ValidationResult(
-                    company_input, cleaned, conf,
-                    citation_str, explanation or "fallback basic clean"
+                    company_input, cleaned_name, conf,
+                    citation_str, final_explanation
                 )
 
             nom_final = data["nom_commercial"]
-            base_conf = float(data.get("confidence", 0.5))
+            base_conf = float(data.get("confidence", 0.5)) # LLM's self-assessed confidence
 
-            # signaux additionnels
-            citations_n = len(urls)
+            # Signaux additionnels pour calibration
+            # urls list is already populated from JSON data's "citations"
             domain = re.sub(r"[^a-z0-9]", "",
                             (email_domain or "").lower().split("@")[-1].split(".")[0])
-            domain_ok = bool(domain and domain in re.sub(r"[^a-z0-9]", "", nom_final.lower()))
-            unknown = not data.get("entreprise_connue", True)
+            # Check if the (cleaned) domain appears in the (cleaned) final name
+            cleaned_nom_final_for_domain_check = re.sub(r"[^a-z0-9]", "", nom_final.lower())
+            domain_ok = bool(domain and domain in cleaned_nom_final_for_domain_check)
 
-            confidence = self._calibrate(base_conf, citations_n, domain_ok, unknown)
+            # `entreprise_connue` comes from the JSON, default to True if missing (conservative)
+            # but prompt now guides LLM to set this, if it's missing, it's more likely an issue.
+            # Let's default to unknown (True for unknown_flag) if not present.
+            unknown_flag = not data.get("entreprise_connue", False) # If 'entreprise_connue':false, unknown_flag = true
+
+            confidence = self._calibrate(base_conf, len(urls), domain_ok, unknown_flag)
             return ValidationResult(company_input, nom_final, confidence, citation_str, explanation)
 
         except Exception as e:
-            logger.error("Company LLM error (%s): %s", company_input, e, exc_info=False)
+            logger.error("Company LLM error during validation call for '%s': %s", company_input, e, exc_info=True)
             cleaned = self._basic_clean(company_input)
             return ValidationResult(company_input, cleaned, 0.3, "error", "exception fallback")
 
