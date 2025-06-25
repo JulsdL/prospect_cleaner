@@ -15,10 +15,20 @@ from prospect_cleaner.services.company_validator import CompanyValidator
 from prospect_cleaner.utils.csv_utils import read_csv, write_csv
 
 class ProspectDataCleaner:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        nom_col: str = settings.default_nom_col,
+        prenom_col: str = settings.default_prenom_col,
+        entreprise_col: str = settings.default_entreprise_col,
+        email_col: str = settings.default_email_col,
+    ) -> None:
         self.name_validator    = NameValidator()
         self.company_validator = CompanyValidator()
         self.sem = asyncio.Semaphore(settings.max_concurrency)
+        self.nom_col = nom_col
+        self.prenom_col = prenom_col
+        self.entreprise_col = entreprise_col
+        self.email_col = email_col
 
     async def _process_row(self, row_idx: int, row, df: pd.DataFrame) -> None:
         """
@@ -27,23 +37,23 @@ class ProspectDataCleaner:
         async with self.sem:
             # Updated to receive three values from name_validator
             n_res, p_res, name_expl = await self.name_validator.validate(
-                row[settings.nom_col], row[settings.prenom_col]
+                row[self.nom_col], row[self.prenom_col]
             )
 
-            email = row.get(settings.email_col, "")
+            email = row.get(self.email_col, "")
             if isinstance(email, str) and "@" in email:
                 domain = email.split("@")[-1]
             else:
                 domain = ""
 
             c_res = await self.company_validator.validate(
-                row[settings.entreprise_col], domain
+                row[self.entreprise_col], domain
             )
 
         # update dataframe in‑place
-        df.at[row_idx, f"{settings.nom_col}_valide"]          = n_res.validated
-        df.at[row_idx, f"{settings.prenom_col}_valide"]       = p_res.validated
-        df.at[row_idx, f"{settings.entreprise_col}_validee"]  = c_res.validated
+        df.at[row_idx, f"{self.nom_col}_valide"]          = n_res.validated
+        df.at[row_idx, f"{self.prenom_col}_valide"]       = p_res.validated
+        df.at[row_idx, f"{self.entreprise_col}_validee"]  = c_res.validated
 
         df.at[row_idx, "confiance_nom"]        = n_res.confidence
         df.at[row_idx, "confiance_prenom"]     = p_res.confidence
@@ -74,20 +84,13 @@ class ProspectDataCleaner:
         input_path: str | Path,
         output_path: str | Path,
     ) -> None:
-        # df = read_csv(input_path)
-        # for col in ("_valide", "_validee",
-        #             "confiance_nom", "confiance_prenom", "confiance_entreprise",
-        #             "source_validation"):
-        #     if col not in df.columns:
-        #         df[col] = ""
-
         df = read_csv(input_path)
 
         # ensure all result columns are present
         result_cols = {
-            f"{settings.nom_col}_valide":        "",
-            f"{settings.prenom_col}_valide":     "",
-            f"{settings.entreprise_col}_validee": "",
+            f"{self.nom_col}_valide":        "",
+            f"{self.prenom_col}_valide":     "",
+            f"{self.entreprise_col}_validee": "",
             "confiance_nom":         0.0,
             "confiance_prenom":      0.0,
             "confiance_entreprise":  0.0,
@@ -111,22 +114,10 @@ class ProspectDataCleaner:
         logger.info("Cleaning finished (%s → %s)", input_path, output_path)
 
         # 🚀 Affiche le résumé en console
-        self._print_summary(
-            df,
-            settings.nom_col,
-            settings.prenom_col,
-            settings.entreprise_col,
-        )
+        self._print_summary(df)
 
 
-    def _print_summary(
-        self,
-        df: pd.DataFrame,
-        nom_col: str,
-        prenom_col: str,
-        entreprise_col: str,
-        ) -> None:
-
+    def _print_summary(self, df: pd.DataFrame) -> None:
         """Affiche un résumé des traitements en console."""
         total = len(df)
         processed = df[df["source_validation"] != ""]
@@ -137,9 +128,9 @@ class ProspectDataCleaner:
             return
 
         # Corrections appliquées
-        nom_corr = (processed[nom_col] != processed[f"{nom_col}_valide"]).sum()
-        prenom_corr = (processed[prenom_col] != processed[f"{prenom_col}_valide"]).sum()
-        ent_corr = (processed[entreprise_col] != processed[f"{entreprise_col}_validee"]).sum()
+        nom_corr = (processed[self.nom_col] != processed[f"{self.nom_col}_valide"]).sum()
+        prenom_corr = (processed[self.prenom_col] != processed[f"{self.prenom_col}_valide"]).sum()
+        ent_corr = (processed[self.entreprise_col] != processed[f"{self.entreprise_col}_validee"]).sum()
 
         # Moyennes de confiance
         avg_nom = processed["confiance_nom"].mean()
@@ -160,15 +151,15 @@ class ProspectDataCleaner:
         print("\n=== EXEMPLES DE CORRECTIONS ===")
 
         # Noms
-        ex_noms = processed[processed[nom_col] != processed[f"{nom_col}_valide"]].head(3)
+        ex_noms = processed[processed[self.nom_col] != processed[f"{self.nom_col}_valide"]].head(3)
         if not ex_noms.empty:
             print("\nCorrections de noms:")
             for _, row in ex_noms.iterrows():
-                print(f"  {row[nom_col]} → {row[f'{nom_col}_valide']} (confiance: {row['confiance_nom']:.2f})")
+                print(f"  {row[self.nom_col]} → {row[f'{self.nom_col}_valide']} (confiance: {row['confiance_nom']:.2f})")
 
         # Entreprises
-        ex_ent = processed[processed[entreprise_col] != processed[f"{entreprise_col}_validee"]].head(3)
+        ex_ent = processed[processed[self.entreprise_col] != processed[f"{self.entreprise_col}_validee"]].head(3)
         if not ex_ent.empty:
             print("\nCorrections d'entreprises:")
             for _, row in ex_ent.iterrows():
-                print(f"  {row[entreprise_col]} → {row[f'{entreprise_col}_validee']} (confiance: {row['confiance_entreprise']:.2f})")
+                print(f"  {row[self.entreprise_col]} → {row[f'{self.entreprise_col}_validee']} (confiance: {row['confiance_entreprise']:.2f})")

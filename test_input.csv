@@ -1,10 +1,3 @@
 nom,prenom,raison_sociale,email
-John,Doe,Google,john.doe@google.com
-Jane,Smith,ACME Corporation Ltd.,jane.s@acme-corp.net
-Peter,Jones,Innovatech Solutions SARL,peter@innovatech.ch
-Alice,Wonder,Globex Inc,
-Bob,Builder,Super Plumbing Services LLC,bob.builder@superplumb.co.uk
-Charlie,Brown,NonExistent Fictional Co,charlie@nonexistent.io
-David,Copperfield,,david@example.com
-Eve,Adams,Microsoft Corp,eve@microsoft.com
-Fiona,Gallagher,Gallagher Plumbing and Sons,contact@gallagher-plumbing-sons.local
+Doe,John,Example Corp,j.doe@example.com
+Smith,Jane,Acme Inc,jane.smith@acme.com

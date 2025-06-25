@@ -9,10 +9,11 @@ class _Settings(BaseSettings):
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
 
     # CSV defaults
-    nom_col: str        = "nom"
-    prenom_col: str     = "prenom"
-    entreprise_col: str = "raison_sociale"
-    email_col: str      = "email"
+    # Default column names, can be overridden at runtime
+    default_nom_col: str        = "nom"
+    default_prenom_col: str     = "prenom"
+    default_entreprise_col: str = "raison_sociale"
+    default_email_col: str      = "email"
 
     # Runtime
     batch_size: int = 10          # rows per save

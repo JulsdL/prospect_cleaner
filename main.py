@@ -7,13 +7,29 @@ from pathlib import Path
 
 app = FastAPI()
 
+from typing import Optional
+
 class CleanRequest(BaseModel):
     input_path: str
     output_path: str
+    nom_col: Optional[str] = None
+    prenom_col: Optional[str] = None
+    entreprise_col: Optional[str] = None
+    email_col: Optional[str] = None
 
 @app.post("/clean_prospects/")
 async def clean_prospects_endpoint(request: CleanRequest):
-    cleaner = ProspectDataCleaner()
+    cleaner_args = {}
+    if request.nom_col:
+        cleaner_args["nom_col"] = request.nom_col
+    if request.prenom_col:
+        cleaner_args["prenom_col"] = request.prenom_col
+    if request.entreprise_col:
+        cleaner_args["entreprise_col"] = request.entreprise_col
+    if request.email_col:
+        cleaner_args["email_col"] = request.email_col
+
+    cleaner = ProspectDataCleaner(**cleaner_args)
     try:
         # Ensure paths are valid Path objects
         input_p = Path(request.input_path)
