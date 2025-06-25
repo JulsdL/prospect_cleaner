@@ -61,14 +61,14 @@ OPENAI_API_KEY="your_openai_api_key_here"
 **Key Environment Variables:**
 
 *   `OPENAI_API_KEY` (Required): Your API key for OpenAI services.
-*   `NOM_COL`: The name of the column in your input CSV that contains the last name. Defaults to `nom`.
-*   `PRENOM_COL`: The name of the column for the first name. Defaults to `prenom`.
-*   `ENTREPRISE_COL`: The name of the column for the company name. Defaults to `raison_sociale`.
-*   `EMAIL_COL`: The name of the column for the email address (used to extract domain for company validation). Defaults to `email`.
+*   `DEFAULT_NOM_COL`: The default name of the column in your input CSV that contains the last name. Defaults to `nom`.
+*   `DEFAULT_PRENOM_COL`: The default name of the column for the first name. Defaults to `prenom`.
+*   `DEFAULT_ENTREPRISE_COL`: The default name of the column for the company name. Defaults to `raison_sociale`.
+*   `DEFAULT_EMAIL_COL`: The default name of the column for the email address (used to extract domain for company validation). Defaults to `email`.
 *   `BATCH_SIZE`: The number of rows to process before saving the output CSV. Defaults to `10`.
 *   `MAX_CONCURRENCY`: The maximum number of concurrent tasks for processing rows. Defaults to `5`.
 
-These settings are defined in `prospect_cleaner/settings.py` and can be overridden by setting the corresponding environment variables in your `.env` file.
+These settings are defined in `prospect_cleaner/settings.py`. The `DEFAULT_` column name settings can be overridden by providing specific parameters when using the CLI or API. Environment variable overrides for column names are no longer supported directly for `NOM_COL`, `PRENOM_COL`, etc.; instead, configure them per-run via CLI/API or rely on the defaults set in `settings.py`.
 
 ## Installation
 
@@ -157,19 +157,27 @@ Run the prospect cleaning process directly from the command line after completin
 2.  **Run the script:**
     The script `prospect_cleaner/cli/clean_prospects.py` handles the cleaning.
     ```bash
-    python -m prospect_cleaner.cli.clean_prospects -i path/to/your/input.csv -o path/to/your/output.csv
+    python -m prospect_cleaner.cli.clean_prospects -i path/to/your/input.csv -o path/to/your/output.csv \
+      [--nom-col YOUR_NOM_COL] [--prenom-col YOUR_PRENOM_COL] \
+      [--entreprise-col YOUR_ENTREPRISE_COL] [--email-col YOUR_EMAIL_COL]
     ```
     *   `-i, --input`: Path to the input CSV file. Defaults to `data/prospects_input.csv`.
     *   `-o, --output`: Path to the output CSV file. Defaults to `data/prospects_cleaned.csv`.
+    *   `--nom-col`: Name of the column for the last name. Defaults to `nom` (or as set by `DEFAULT_NOM_COL` in `.env`).
+    *   `--prenom-col`: Name of the column for the first name. Defaults to `prenom` (or `DEFAULT_PRENOM_COL`).
+    *   `--entreprise-col`: Name of the column for the company name. Defaults to `raison_sociale` (or `DEFAULT_ENTREPRISE_COL`).
+    *   `--email-col`: Name of the column for the email. Defaults to `email` (or `DEFAULT_EMAIL_COL`).
+
 
     Example using default paths (creates `data/prospects_cleaned.csv` from `data/prospects_input.csv`):
     ```bash
     python -m prospect_cleaner.cli.clean_prospects
     ```
 
-    Example with custom paths:
+    Example with custom paths and column names:
     ```bash
-    python -m prospect_cleaner.cli.clean_prospects --input my_inputs.csv --output my_outputs.csv
+    python -m prospect_cleaner.cli.clean_prospects --input my_inputs.csv --output my_outputs.csv \
+      --nom-col "Last Name" --prenom-col "First Name" --entreprise-col "Company" --email-col "Email Address"
     ```
 
 ### API (Directly)
@@ -194,18 +202,37 @@ If you have followed the [Installation](#installation) steps, you can run the Fa
 
     Use tools like `curl`, Postman, or the interactive docs to send requests. The `input_path` and `output_path` for the `/clean_prospects/` endpoint should be valid paths accessible by the server process.
 
+    To specify custom column names when using the API, include them in the JSON payload:
+    ```json
+    {
+      "input_path": "data/my_prospects.csv",
+      "output_path": "data/my_cleaned_prospects.csv",
+      "nom_col": "Surname",
+      "prenom_col": "GivenName",
+      "entreprise_col": "Organization",
+      "email_col": "EmailAddress"
+    }
+    ```
+    If any of these column name parameters are omitted, the application will use the default values specified in `prospect_cleaner/settings.py` (e.g., `DEFAULT_NOM_COL`).
+
 ## Input/Output CSV Format
 
 ### Input CSV
 
-The input CSV file must contain columns for prospect information. By default, the application expects (configurable via environment variables, see [Configuration](#configuration)):
+The input CSV file must contain columns for prospect information. The application expects specific column names for last name, first name, company name, and email.
+The default column names are:
+*   `nom` (for last name)
+*   `prenom` (for first name)
+*   `raison_sociale` (for company name)
+*   `email` (for email address, used as a hint for company validation)
 
-*   `nom`: Last name.
-*   `prenom`: First name.
-*   `raison_sociale`: Company name.
-*   `email`: Email address (domain used for company validation hint).
+These defaults can be seen in `prospect_cleaner/settings.py` (e.g., `DEFAULT_NOM_COL`).
 
-Example `input.csv`:
+**If your CSV uses different column names, you must specify them** using:
+*   Command-line arguments (e.g., `--nom-col "Your Last Name Column"`) if using the CLI.
+*   Parameters in the JSON request body (e.g., `"nom_col": "Your Last Name Column"`) if using the API.
+
+Example `input.csv` (using default column names):
 ```csv
 nom,prenom,raison_sociale,email
 Doe,John,Example Corp,j.doe@example.com
