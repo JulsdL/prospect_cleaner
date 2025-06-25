@@ -35,12 +35,12 @@ class ProspectDataCleaner:
         One row = one task.  We guard the LLM calls with a semaphore.
         """
         async with self.sem:
-            # Updated to receive three values from name_validator
+            email = row.get(self.email_col, "")
+            # Updated to receive three values from name_validator and pass email
             n_res, p_res, name_expl = await self.name_validator.validate(
-                row[self.nom_col], row[self.prenom_col]
+                row[self.nom_col], row[self.prenom_col], email
             )
 
-            email = row.get(self.email_col, "")
             if isinstance(email, str) and "@" in email:
                 domain = email.split("@")[-1]
             else:
