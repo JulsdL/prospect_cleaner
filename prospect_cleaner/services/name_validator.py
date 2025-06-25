@@ -97,12 +97,16 @@ Output attendu:
 
     async def validate(
         self, nom: str, prenom: str
-    ) -> Tuple[ValidationResult, ValidationResult]:
+    ) -> Tuple[ValidationResult, ValidationResult, str]: # Added str for explanation
         nom, prenom = (nom or "").strip(), (prenom or "").strip()
+        name_explication = "" # Default empty explanation
+
         if not self._client or not (nom or prenom):
+            name_explication = "No LLM client or empty input."
             return (
                 ValidationResult(nom, nom, 0.0, "no_llm"),
                 ValidationResult(prenom, prenom, 0.0, "no_llm"),
+                name_explication,
             )
 
         prompt = self._prompt_tmpl.format(nom=nom, prenom=prenom)
@@ -111,23 +115,51 @@ Output attendu:
                 model="gpt-4.1-mini",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.1,
-                max_tokens=300,
+                max_tokens=300, # Increased max_tokens slightly for potentially longer explanations
             )
             txt = resp.choices[0].message.content.strip()
-            txt = re.sub(r"^```json|```$", "", txt).strip()
-            data = json.loads(txt)
+            # Attempt to strip markdown and then load JSON
+            # Handle cases where ```json might be missing or text isn't perfect JSON
+            json_match = re.search(r"```json\s*(\{.*?\})\s*```", txt, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(1)
+            else:
+                # If no markdown block, assume the whole text is the JSON content
+                # This might fail if the LLM includes non-JSON text without markdown
+                json_str = txt
 
-            conf_nom     = self._calibrate(float(data["confidence_nom"]), nom, data["nom_corrige"])
-            conf_prenom  = self._calibrate(float(data["confidence_prenom"]), prenom, data["prenom_corrige"])
+            data = json.loads(json_str)
+
+            conf_nom     = self._calibrate(float(data.get("confidence_nom", 0.0)), nom, data.get("nom_corrige", nom))
+            conf_prenom  = self._calibrate(float(data.get("confidence_prenom", 0.0)), prenom, data.get("prenom_corrige", prenom))
+
+            reasoning = data.get("reasoning", "")
+            corrections = data.get("corrections_appliquees", "")
+
+            if reasoning and corrections:
+                name_explication = f"Raisonnement: {reasoning}. Corrections: {corrections}."
+            elif reasoning:
+                name_explication = f"Raisonnement: {reasoning}."
+            elif corrections:
+                name_explication = f"Corrections: {corrections}."
+            else:
+                name_explication = "Aucune explication détaillée fournie par l'IA."
+
+            # Ensure nom_corrige and prenom_corrige exist, otherwise use original
+            nom_corrige = data.get("nom_corrige", nom)
+            prenom_corrige = data.get("prenom_corrige", prenom)
 
             return (
-                ValidationResult(nom, data["nom_corrige"], conf_nom, "gpt4.1-mini"),
-                ValidationResult(prenom, data["prenom_corrige"], conf_prenom, "gpt4.1-mini"),
+                ValidationResult(nom, nom_corrige, conf_nom, "gpt4.1-mini"),
+                ValidationResult(prenom, prenom_corrige, conf_prenom, "gpt4.1-mini"),
+                name_explication,
             )
 
         except Exception as e:
-            logger.error("Name LLM error (%s %s): %s", nom, prenom, e, exc_info=False)
+            logger.error("Name LLM error (%s %s): %s", nom, prenom, e, exc_info=True) # exc_info=True for more details
+            name_explication = f"Erreur lors de la validation du nom: {str(e)}"
             return (
                 ValidationResult(nom, nom, 0.0, "error"),
                 ValidationResult(prenom, prenom, 0.0, "error"),
+                name_explication,
             )

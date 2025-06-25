@@ -25,7 +25,8 @@ class ProspectDataCleaner:
         One row = one task.  We guard the LLM calls with a semaphore.
         """
         async with self.sem:
-            n_res, p_res = await self.name_validator.validate(
+            # Updated to receive three values from name_validator
+            n_res, p_res, name_expl = await self.name_validator.validate(
                 row[settings.nom_col], row[settings.prenom_col]
             )
 
@@ -49,7 +50,9 @@ class ProspectDataCleaner:
         df.at[row_idx, "confiance_entreprise"] = c_res.confidence
         df.at[row_idx, "entreprise_citations"] = c_res.source
         df.at[row_idx, "entreprise_explication"] = c_res.explanation
+        df.at[row_idx, "name_explication"]     = name_expl # Added new column
         df.at[row_idx, "source_validation"]    = f"nom:{n_res.source}"
+
 
     async def _save_loop(self, df: pd.DataFrame, out: Path) -> None:
         """
@@ -90,6 +93,7 @@ class ProspectDataCleaner:
             "confiance_entreprise":  0.0,
             "entreprise_citations":  "",
             "entreprise_explication":"",
+            "name_explication":      "", # Added new column default
             "source_validation":     "",
         }
         for col, default in result_cols.items():
