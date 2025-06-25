@@ -9,9 +9,10 @@ class NameValidator:
     """Isolated service ─ can be mocked in tests."""
 
     _prompt_tmpl = """
-Analyse et corrige si nécessaire ces informations de nom/prénom:
+Analyse et corrige si nécessaire ces informations de nom/prénom, en utilisant l'email comme indice si disponible:
 Nom: "{nom}"
 Prénom: "{prenom}"
+Email: "{email}"
 
 Problèmes possibles à corriger :
         - Inversion nom/prénom (ex: "Dupont Pierre" → Prénom: "Pierre", Nom: "Dupont").
@@ -24,29 +25,40 @@ Instructions spécifiques pour noms multiculturels :
         - Noms Est-Asiatiques (chinois, japonais, coréen, vietnamien) :
             - L'ordre peut être Nom puis Prénom (ex: "Zhang Li Wei" → Nom: "Zhang", Prénom: "Li Wei"). Sois attentif à l'ordre fourni et corrige seulement si manifestement inversé pour un contexte occidental.
             - Les prénoms peuvent être composés de plusieurs parties (ex: "Li Wei", "Xiao Li", "Kenjiro"). Ces parties doivent rester groupées dans le champ prénom. Ex: Prénom: "Xiao Li", Nom: "Chen" (si l'entrée était "Chen Xiao Li").
-        - Noms Hispaniques/Portugais : Souvent composés de plusieurs noms et prénoms. Ex: "Maria João Da Silva Santos" → Prénom: "Maria João", Nom: "Da Silva Santos".
+        - Noms Hispaniques/Portugais : Souvent composés de plusieurs noms et prénoms. Ex: "Maria João Da Silva Santos" → Prénom: "Maria João", Nom: "Da Silva Santos". Il est fréquent d'avoir un prénom composé et deux noms de famille. Si une partie du prénom semble être un nom de famille, il faut envisager de la déplacer. **Utilise l'email pour confirmer l'ordre et la composition des noms.**
 
 Exemple de cas complexe :
-Input: Nom: "Ben Ali Hassan", Prénom: "Mohammed"
+Input: Nom: "Ben Ali Hassan", Prénom: "Mohammed", Email: "mohammed.benali@example.com"
 Output attendu (si "Ben Ali Hassan" est le nom complet):
 {{
     "nom_corrige": "Ben Ali Hassan",
     "prenom_corrige": "Mohammed",
     "confidence_nom": 0.85,
     "confidence_prenom": 0.95,
-    "reasoning": "Nom de structure arabe, 'Ben' fait partie du nom de famille. Prénom simple.",
+    "reasoning": "Nom de structure arabe, 'Ben' fait partie du nom de famille. Prénom simple. Email confirme la structure.",
     "corrections_appliquees": "Aucune correction, ordre initial correct."
 }}
 
-Input: Nom: "Tanaka", Prénom: "Hiroshi Kenji" (supposant une erreur d'entrée où Kenji est un 2e prénom)
+Input: Nom: "Tanaka", Prénom: "Hiroshi Kenji", Email: "h.tanaka@example.jp"
 Output attendu:
 {{
     "nom_corrige": "Tanaka",
     "prenom_corrige": "Hiroshi Kenji",
     "confidence_nom": 0.95,
     "confidence_prenom": 0.90,
-    "reasoning": "Prénom japonais potentiellement composé (Hiroshi Kenji). Nom simple.",
+    "reasoning": "Prénom japonais potentiellement composé (Hiroshi Kenji). Nom simple. Email ne contredit pas.",
     "corrections_appliquees": "Fusion des prénoms si jugé comme un prénom composé."
+}}
+
+Input: Nom: "Silva", Prénom: "Ana Beatriz Ferreira", Email: "ana.silva@lemoncurve.com"
+Output attendu:
+{{
+    "nom_corrige": "Silva Ferreira",
+    "prenom_corrige": "Ana Beatriz",
+    "confidence_nom": 0.90,
+    "confidence_prenom": 0.90,
+    "reasoning": "Nom portugais. L'email 'ana.silva@lemoncurve.com' suggère fortement que 'Silva' est le premier nom de famille et 'Ana' ou 'Ana Beatriz' est le prénom. 'Ferreira' est donc probablement le deuxième nom de famille. La structure Prénom + Nom1 + Nom2 est courante. L'email est un indice fort pour 'Silva' comme nom principal et 'Ferreira' comme nom additionnel.",
+    "corrections_appliquees": "Déplacement de 'Ferreira' du prénom vers le nom pour former 'Silva Ferreira', en s'appuyant sur l'indice de l'email."
 }}
 
         Pour le score de confiance, évalue entre 0 et 1 sur ces critères :
@@ -96,20 +108,21 @@ Output attendu:
         )
 
     async def validate(
-        self, nom: str, prenom: str
+        self, nom: str, prenom: str, email: str | None = None
     ) -> Tuple[ValidationResult, ValidationResult, str]: # Added str for explanation
         nom, prenom = (nom or "").strip(), (prenom or "").strip()
+        email_str = (email or "").strip()
         name_explication = "" # Default empty explanation
 
-        if not self._client or not (nom or prenom):
-            name_explication = "No LLM client or empty input."
+        if not self._client or not (nom or prenom): # Email is optional for validation to proceed
+            name_explication = "No LLM client or empty name/prenom input."
             return (
                 ValidationResult(nom, nom, 0.0, "no_llm"),
                 ValidationResult(prenom, prenom, 0.0, "no_llm"),
                 name_explication,
             )
 
-        prompt = self._prompt_tmpl.format(nom=nom, prenom=prenom)
+        prompt = self._prompt_tmpl.format(nom=nom, prenom=prenom, email=email_str)
         try:
             resp = await self._client.chat.completions.create(
                 model="gpt-4.1-mini",
