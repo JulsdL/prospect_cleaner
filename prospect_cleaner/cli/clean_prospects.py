@@ -7,7 +7,7 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         description="Clean a prospect CSV using LLM validation."
     )
-    parser.add_argument("-i", "--input", default="data/prospects_input.csv")
+    parser.add_argument("-i", "--input", default="data/prospects_input_small.csv")
     parser.add_argument("-o", "--output", default="data/prospects_cleaned.csv")
     args = parser.parse_args(argv)
 

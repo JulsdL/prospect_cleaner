@@ -46,6 +46,9 @@ The application uses an `.env` file to manage environment variables. Create an `
 Example `.env` file content:
 ```env
 OPENAI_API_KEY="your_openai_api_key_here"
+```
+
+The settings.py file in the `prospect_cleaner` directory contains default values for various configurations, which can be modified as needed.
 
 # Optional: CSV column names (defaults are shown)
 # NOM_COL="nom"
@@ -56,19 +59,12 @@ OPENAI_API_KEY="your_openai_api_key_here"
 # Optional: Runtime settings (defaults are shown)
 # BATCH_SIZE=10
 # MAX_CONCURRENCY=5
-```
+
 
 **Key Environment Variables:**
 
 *   `OPENAI_API_KEY` (Required): Your API key for OpenAI services.
-*   `NOM_COL`: The name of the column in your input CSV that contains the last name. Defaults to `nom`.
-*   `PRENOM_COL`: The name of the column for the first name. Defaults to `prenom`.
-*   `ENTREPRISE_COL`: The name of the column for the company name. Defaults to `raison_sociale`.
-*   `EMAIL_COL`: The name of the column for the email address (used to extract domain for company validation). Defaults to `email`.
-*   `BATCH_SIZE`: The number of rows to process before saving the output CSV. Defaults to `10`.
-*   `MAX_CONCURRENCY`: The maximum number of concurrent tasks for processing rows. Defaults to `5`.
 
-These settings are defined in `prospect_cleaner/settings.py` and can be overridden by setting the corresponding environment variables in your `.env` file.
 
 ## Installation
 
@@ -93,7 +89,7 @@ Follow these steps to set up the project for local development or direct CLI usa
     ```
 
 4.  **Set up environment variables:**
-    Create an `.env` file in the project root as described in the [Configuration](#configuration) section. At a minimum, it should contain your `OPENAI_API_KEY`.
+    Create an `.env` file in the project root as described in the [Configuration](#configuration) section. At a minimum, it must contain your `OPENAI_API_KEY`.
     ```env
     OPENAI_API_KEY="your_openai_api_key_here"
     ```
@@ -225,7 +221,7 @@ The output CSV includes all original columns plus:
 *   `entreprise_citations`: Source/citation for company validation.
 *   `entreprise_explication`: Explanation for company validation.
 *   `name_explication`: Explanation for name validation.
-*   `source_validation`: Consolidated validation source/status (e.g., `nom:LLM_MATCH`).
+*   `source_validation`: Consolidated validation source/status (e.g., `nom:gpt4.1-mini`).
 
 The exact names of `_valide`/`_validee` columns depend on input column configuration.
 
@@ -255,7 +251,3 @@ Contributions are welcome! Please:
 5.  Open a pull request.
 
 Adhere to style guidelines and add tests if applicable.
-
-## License
-
-This project is not currently licensed. It is recommended to add a `LICENSE` file (e.g., MIT, Apache 2.0, GPL) to define usage and contribution terms.

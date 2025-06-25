@@ -19,7 +19,7 @@ async def clean_prospects_endpoint(request: CleanRequest):
         input_p = Path(request.input_path)
         output_p = Path(request.output_path)
 
-        # It's good practice to ensure the output directory exists
+        # Ensure the output directory exists
         output_p.parent.mkdir(parents=True, exist_ok=True)
 
         await cleaner.clean(input_p, output_p)
