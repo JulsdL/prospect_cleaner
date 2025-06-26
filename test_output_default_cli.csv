@@ -1,3 +1,0 @@
-nom,prenom,raison_sociale,email,nom_valide,prenom_valide,raison_sociale_validee,confiance_nom,confiance_prenom,confiance_entreprise,entreprise_citations,entreprise_explication,name_explication,source_validation
-Doe,John,Example Corp,j.doe@example.com,Doe,John,Example Corp,0.0,0.0,0.0,no_llm,,No LLM client or empty input.,nom:no_llm
-Smith,Jane,Acme Inc,jane.smith@acme.com,Smith,Jane,Acme Inc,0.0,0.0,0.0,no_llm,,No LLM client or empty input.,nom:no_llm

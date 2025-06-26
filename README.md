@@ -50,19 +50,8 @@ OPENAI_API_KEY="your_openai_api_key_here"
 
 The settings.py file in the `prospect_cleaner` directory contains default values for various configurations, which can be modified as needed.
 
-# Optional: CSV column names (defaults are shown)
-# NOM_COL="nom"
-# PRENOM_COL="prenom"
-# ENTREPRISE_COL="raison_sociale"
-# EMAIL_COL="email"
-
-# Optional: Runtime settings (defaults are shown)
-# BATCH_SIZE=10
-# MAX_CONCURRENCY=5
-
-
 **Key Environment Variables:**
-
+```
 *   `OPENAI_API_KEY` (Required): Your API key for OpenAI services.
 *   `DEFAULT_NOM_COL`: The default name of the column in your input CSV that contains the last name. Defaults to `nom`.
 *   `DEFAULT_PRENOM_COL`: The default name of the column for the first name. Defaults to `prenom`.
@@ -70,6 +59,7 @@ The settings.py file in the `prospect_cleaner` directory contains default values
 *   `DEFAULT_EMAIL_COL`: The default name of the column for the email address (used to extract domain for company validation). Defaults to `email`.
 *   `BATCH_SIZE`: The number of rows to process before saving the output CSV. Defaults to `10`.
 *   `MAX_CONCURRENCY`: The maximum number of concurrent tasks for processing rows. Defaults to `5`.
+```
 
 These settings are defined in `prospect_cleaner/settings.py`. The `DEFAULT_` column name settings can be overridden by providing specific parameters when using the CLI or API. Environment variable overrides for column names are no longer supported directly for `NOM_COL`, `PRENOM_COL`, etc.; instead, configure them per-run via CLI/API or rely on the defaults set in `settings.py`.
 
